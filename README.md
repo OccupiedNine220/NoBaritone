@@ -10,6 +10,14 @@ Advanced anti-Baritone plugin for Minecraft servers. Detects and prevents usage 
 - **Multi-Language Support**: Easily add custom translations through language files
 - **Permissions System**: Fine-grained permissions for all features
 - **Performance Friendly**: Minimal impact on server performance
+- **API for Developers**: Integrate with other plugins and add custom detection methods
+- **Legacy Support**: Special version available for older Minecraft servers (1.8-1.12)
+- **ProtocolLib Enhancement**: Optional deeper packet analysis when ProtocolLib is available
+
+## Versions
+
+- **Standard Version**: For modern Minecraft servers (1.13+) 
+- **Legacy Version**: For older Minecraft servers (1.8-1.12)
 
 ## Installation
 
@@ -50,6 +58,15 @@ detection:
   pattern-sample-size: 20
   algorithmic-path-detection: 0.7
   min-samples: 10
+  exclude-op-players: true
+  exclude-creative-mode: true
+  
+  advanced:
+    check-block-break-patterns: true
+    check-pathfinding: true
+    max-violation-points: 100
+    violation-decay-minutes: 30
+    enable-packet-analysis: false
 ```
 
 ### Action Settings
@@ -63,6 +80,7 @@ action:
   warn-player: true
   kick-enabled: true
   ban-enabled: false
+  log-to-file: true
 ```
 
 ## Languages
@@ -75,12 +93,84 @@ language: "ru_RU"  # Options: en_US, ru_RU, etc.
 
 You can add your own language file by creating a new file in the `plugins/NoBaritone/lang/` directory.
 
+## Developer API
+
+NoBaritone provides an API for other plugins to interact with the detection system.
+
+```java
+// Get the NoBaritone API
+NoBaritoneAPI api = ((NoBaritone) Bukkit.getPluginManager().getPlugin("NoBaritone")).getAPI();
+
+// Register a custom detection module
+api.registerDetectionModule("MyDetector", new CustomDetector());
+
+// Add custom violations to a player
+api.addViolation(player, 5);
+
+// Check if a player is suspected of using Baritone
+boolean isSuspicious = api.isUsingBaritone(player);
+```
+
+## Custom Detection Modules
+
+You can create custom detection modules to extend NoBaritone's capabilities:
+
+```java
+public class CustomDetector implements NoBaritoneAPI.DetectionModule {
+    @Override
+    public float processMovement(Player player, Location from, Location to) {
+        // Your detection logic here
+        return suspiciousScore; // Return > 0 if suspicious
+    }
+
+    @Override
+    public String getName() {
+        return "Custom Detector";
+    }
+
+    @Override
+    public String getDescription() {
+        return "Detects custom Baritone patterns";
+    }
+}
+```
+
+## Events
+
+NoBaritone exposes events that other plugins can listen to:
+
+```java
+@EventHandler
+public void onBaritoneViolation(NoBaritoneViolationEvent event) {
+    // Access the player
+    Player player = event.getPlayer();
+    
+    // Access the violation level
+    int level = event.getViolationLevel();
+    
+    // Modify the violation level
+    event.setViolationLevel(level + 5);
+    
+    // Cancel the violation (prevent punishment)
+    event.setCancelled(true);
+}
+```
+
 ## Building from Source
 
 ```bash
-git clone https://github.com/OccupiedNine220/NoBaritone.git
+git clone https://github.com/nobaritone/NoBaritone.git
 cd NoBaritone
 mvn clean package
 ```
+
+To build the Legacy version for Minecraft 1.8-1.12:
+
+```bash
+git checkout legacy-support
+mvn clean package
+```
+
+## License
 
 This project is licensed under the GPL-3.0 license - see the LICENSE file for details. 

@@ -7,17 +7,26 @@ import org.bukkit.event.Listener;
 import org.bukkit.event.player.PlayerJoinEvent;
 import org.bukkit.event.player.PlayerMoveEvent;
 import org.bukkit.plugin.java.JavaPlugin;
+import org.bukkit.event.block.BlockBreakEvent;
+import org.bukkit.GameMode;
 
 import java.util.HashMap;
 import java.util.Map;
 import java.util.UUID;
+import java.util.logging.Level;
 
+/**
+ * Main plugin class for NoBaritone anti-Baritone protection
+ */
 public class NoBaritone extends JavaPlugin implements Listener {
 
     private static final String PREFIX = ChatColor.RED + "[NoBaritone] " + ChatColor.RESET;
     private final Map<UUID, PlayerMovementData> playerData = new HashMap<>();
     private BaritoneDetectionConfig config;
     private LanguageManager languageManager;
+    private boolean protocolLibAvailable = false;
+    private PacketAnalyzer packetAnalyzer;
+    private NoBaritoneAPI api;
 
     @Override
     public void onEnable() {
@@ -30,6 +39,12 @@ public class NoBaritone extends JavaPlugin implements Listener {
         // Initialize language manager and load messages
         languageManager = new LanguageManager(this);
         
+        // Initialize API
+        api = new NoBaritoneAPI(this);
+        
+        // Setup ProtocolLib if available
+        setupProtocolLib();
+        
         // Register event handlers
         getServer().getPluginManager().registerEvents(this, this);
         
@@ -41,7 +56,26 @@ public class NoBaritone extends JavaPlugin implements Listener {
 
     @Override
     public void onDisable() {
+        // Clean up packet listeners if ProtocolLib is used
+        if (protocolLibAvailable && packetAnalyzer != null) {
+            packetAnalyzer.unregisterListeners();
+        }
+        
         getLogger().info(languageManager.getMessage("plugin.disabled"));
+    }
+    
+    /**
+     * Sets up ProtocolLib integration if available
+     */
+    private void setupProtocolLib() {
+        if (getServer().getPluginManager().getPlugin("ProtocolLib") != null) {
+            protocolLibAvailable = true;
+            packetAnalyzer = new PacketAnalyzer(this);
+            packetAnalyzer.registerListeners();
+            getLogger().info("ProtocolLib found! Enhanced Baritone detection enabled.");
+        } else {
+            getLogger().info("ProtocolLib not found. Using basic detection methods.");
+        }
     }
 
     @EventHandler
@@ -62,6 +96,22 @@ public class NoBaritone extends JavaPlugin implements Listener {
         Player player = event.getPlayer();
         UUID playerId = player.getUniqueId();
         
+        // Check bypass permission
+        if (player.hasPermission("nobaritone.bypass")) {
+            return;
+        }
+        
+        // Check for OP exclusion
+        if (config.shouldExcludeOPPlayers() && player.isOp()) {
+            return;
+        }
+        
+        // Skip creative mode players if configured
+        if (config.shouldExcludeCreativePlayers() && 
+            player.getGameMode() == GameMode.CREATIVE) {
+            return;
+        }
+        
         // Get player movement data
         PlayerMovementData data = playerData.get(playerId);
         if (data == null) {
@@ -78,12 +128,47 @@ public class NoBaritone extends JavaPlugin implements Listener {
         }
     }
     
+    @EventHandler
+    public void onBlockBreak(BlockBreakEvent event) {
+        if (!config.isEnabled() || !config.shouldCheckBlockBreakPatterns()) {
+            return;
+        }
+        
+        Player player = event.getPlayer();
+        UUID playerId = player.getUniqueId();
+        
+        // Skip bypassed players
+        if (player.hasPermission("nobaritone.bypass")) {
+            return;
+        }
+        
+        // Get player data
+        PlayerMovementData data = playerData.get(playerId);
+        if (data == null) {
+            return;
+        }
+        
+        // Check for mining patterns associated with Baritone
+        if (data.analyzeMiningPattern(event.getBlock())) {
+            getLogger().log(Level.INFO, "Detected possible Baritone mine pattern for player {0}", 
+                    player.getName());
+            
+            // Increase violation level but with lower weight
+            data.incrementViolationLevel(0.5f);
+        }
+    }
+    
     /**
      * Checks for Baritone in the player's client
      */
     private void checkForBaritoneClient(Player player) {
         // Implementation for packet-based detection can go here
         // For example, sending a specific packet and checking response
+        
+        // With ProtocolLib, more advanced checking is done via the PacketAnalyzer class
+        if (protocolLibAvailable) {
+            getLogger().fine("ProtocolLib checking client data for " + player.getName());
+        }
     }
     
     /**
@@ -96,17 +181,40 @@ public class NoBaritone extends JavaPlugin implements Listener {
         // Take actions based on violation level
         int violationLevel = data.getViolationLevel();
         
-        if (violationLevel >= config.getKickThreshold()) {
+        // Allow plugins to modify the violation level or cancel actions via API
+        NoBaritoneViolationEvent event = new NoBaritoneViolationEvent(player, violationLevel);
+        getServer().getPluginManager().callEvent(event);
+        
+        if (event.isCancelled()) {
+            return;
+        }
+        
+        // Use the possibly modified violation level
+        violationLevel = event.getViolationLevel();
+        
+        if (violationLevel >= config.getBanThreshold() && config.isBanEnabled()) {
+            // Ban player
+            String banCommand = "ban " + player.getName() + " " + languageManager.getMessage("action.ban");
+            getServer().dispatchCommand(getServer().getConsoleSender(), banCommand);
+            getLogger().info(languageManager.getMessage("log.player_banned", 
+                    player.getName(), String.valueOf(violationLevel)));
+            return;
+        }
+        
+        if (violationLevel >= config.getKickThreshold() && config.isKickEnabled()) {
             // Kick player
-            if (config.isKickEnabled()) {
-                player.kickPlayer(PREFIX + languageManager.getMessage("action.kick"));
-                data.resetViolationLevel();
-                getLogger().info(languageManager.getMessage("log.player_kicked", player.getName(), String.valueOf(violationLevel)));
-            }
-        } else if (violationLevel >= config.getNotifyThreshold()) {
+            player.kickPlayer(PREFIX + languageManager.getMessage("action.kick"));
+            data.resetViolationLevel();
+            getLogger().info(languageManager.getMessage("log.player_kicked", 
+                    player.getName(), String.valueOf(violationLevel)));
+            return;
+        }
+        
+        if (violationLevel >= config.getNotifyThreshold()) {
             // Notify admins
             if (config.isNotifyAdminsEnabled()) {
-                notifyAdmins(languageManager.getMessage("admin.notification", player.getName(), String.valueOf(violationLevel)));
+                notifyAdmins(languageManager.getMessage("admin.notification", 
+                        player.getName(), String.valueOf(violationLevel)));
             }
             
             // Warn player
@@ -152,5 +260,19 @@ public class NoBaritone extends JavaPlugin implements Listener {
      */
     public LanguageManager getLanguageManager() {
         return languageManager;
+    }
+    
+    /**
+     * Checks if ProtocolLib is available for advanced detection
+     */
+    public boolean isProtocolLibAvailable() {
+        return protocolLibAvailable;
+    }
+    
+    /**
+     * Gets the NoBaritone API interface
+     */
+    public NoBaritoneAPI getAPI() {
+        return api;
     }
 } 

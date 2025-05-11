@@ -1,10 +1,11 @@
 name: NoBaritone
 version: '${project.version}'
 main: com.nobaritone.plugin.NoBaritone
-api-version: 1.16
 authors: [NoBaritoneTeam]
-description: Advanced protection against Baritone and similar pathfinding mods
+description: Advanced protection against Baritone and similar pathfinding mods (Legacy 1.8-1.12 Support)
 website: https://github.com/nobaritone
+
+softdepend: [ProtocolLib]
 
 commands:
   nobaritone:

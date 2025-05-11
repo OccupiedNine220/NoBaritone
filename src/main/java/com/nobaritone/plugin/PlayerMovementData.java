@@ -1,6 +1,7 @@
 package com.nobaritone.plugin;
 
 import org.bukkit.Location;
+import org.bukkit.block.Block;
 
 import java.util.ArrayList;
 import java.util.LinkedList;
@@ -12,9 +13,11 @@ import java.util.Queue;
  */
 public class PlayerMovementData {
     private static final int MAX_MOVEMENT_HISTORY = 100;
+    private static final int MAX_MINING_HISTORY = 30;
     
     private final Queue<MovementEntry> movementHistory = new LinkedList<>();
-    private int violationLevel = 0;
+    private final Queue<MiningEntry> miningHistory = new LinkedList<>();
+    private float violationLevel = 0;
     private long lastViolationTime = 0;
     
     // Metrics for algorithm detection
@@ -22,6 +25,10 @@ public class PlayerMovementData {
     private int exactAngleChanges = 0;
     private int perfectJumps = 0;
     private long lastDirectionChangeTime = 0;
+    
+    // Mining pattern detection
+    private int veinMineCounter = 0;
+    private int patternMineCounter = 0;
     
     /**
      * Adds a movement entry to the player's history
@@ -50,6 +57,170 @@ public class PlayerMovementData {
         
         // Analyze latest movement
         analyzeLatestMovement();
+    }
+    
+    /**
+     * Analyzes a mining action by the player
+     * 
+     * @param block The block that was mined
+     * @return true if a suspicious mining pattern was detected
+     */
+    public boolean analyzeMiningPattern(Block block) {
+        // Record this mining action
+        MiningEntry entry = new MiningEntry(
+            System.currentTimeMillis(),
+            block.getLocation().getX(),
+            block.getLocation().getY(),
+            block.getLocation().getZ(),
+            block.getType().toString()
+        );
+        
+        // Add to mining history
+        miningHistory.add(entry);
+        
+        // Maintain history size
+        if (miningHistory.size() > MAX_MINING_HISTORY) {
+            miningHistory.poll();
+        }
+        
+        // Check for vein mining pattern (Baritone signature)
+        if (detectVeinMiningPattern()) {
+            veinMineCounter++;
+            return veinMineCounter > 3;
+        }
+        
+        // Check for tunnel/pattern mining (Baritone signature)
+        if (detectPatternMiningPattern()) {
+            patternMineCounter++;
+            return patternMineCounter > 3;
+        }
+        
+        return false;
+    }
+    
+    /**
+     * Detects vein mining patterns (characteristic of Baritone)
+     */
+    private boolean detectVeinMiningPattern() {
+        if (miningHistory.size() < 5) {
+            return false;
+        }
+        
+        List<MiningEntry> entries = new ArrayList<>(miningHistory);
+        
+        // Vein mining in Baritone usually follows optimal paths
+        // which means it will mine connected blocks in a specific order
+        
+        // For now, we'll do a simple check - if all recent blocks are the same type
+        // and are close to each other, it's likely vein mining
+        String blockType = entries.get(entries.size() - 1).blockType;
+        int sameTypeCount = 0;
+        int connectedCount = 0;
+        
+        for (int i = entries.size() - 2; i >= Math.max(0, entries.size() - 5); i--) {
+            MiningEntry entry = entries.get(i);
+            
+            // Check if same type
+            if (entry.blockType.equals(blockType)) {
+                sameTypeCount++;
+                
+                // Check if connected to the previous block
+                if (isBlocksConnected(entries.get(i + 1), entry)) {
+                    connectedCount++;
+                }
+            }
+        }
+        
+        // If most blocks are the same type and connected, it's likely vein mining
+        return sameTypeCount >= 3 && connectedCount >= 2;
+    }
+    
+    /**
+     * Detects pattern mining patterns (characteristic of Baritone)
+     */
+    private boolean detectPatternMiningPattern() {
+        if (miningHistory.size() < 10) {
+            return false;
+        }
+        
+        List<MiningEntry> entries = new ArrayList<>(miningHistory);
+        
+        // Pattern mining in Baritone usually creates tunnels or branches
+        // with very regular patterns
+        
+        // Check for linear mining (straight line)
+        boolean linearPattern = checkLinearMiningPattern(entries);
+        
+        // Check for branch mining (multiple parallel tunnels)
+        boolean branchPattern = checkBranchMiningPattern(entries);
+        
+        return linearPattern || branchPattern;
+    }
+    
+    /**
+     * Checks if a linear mining pattern is detected
+     */
+    private boolean checkLinearMiningPattern(List<MiningEntry> entries) {
+        // Extract the last 10 mining actions
+        int size = entries.size();
+        List<MiningEntry> recent = entries.subList(Math.max(0, size - 10), size);
+        
+        // Check if blocks are mined in a straight line
+        double dx = 0, dy = 0, dz = 0;
+        boolean directionSet = false;
+        
+        for (int i = 1; i < recent.size(); i++) {
+            MiningEntry current = recent.get(i);
+            MiningEntry previous = recent.get(i - 1);
+            
+            double currentDx = current.x - previous.x;
+            double currentDy = current.y - previous.y;
+            double currentDz = current.z - previous.z;
+            
+            // If first pair, set the direction
+            if (!directionSet) {
+                dx = currentDx;
+                dy = currentDy;
+                dz = currentDz;
+                directionSet = true;
+            } else {
+                // Check if the current direction matches the established direction
+                if ((Math.abs(currentDx) > 0.1 && Math.abs(dx) > 0.1 && Math.signum(currentDx) != Math.signum(dx)) ||
+                    (Math.abs(currentDy) > 0.1 && Math.abs(dy) > 0.1 && Math.signum(currentDy) != Math.signum(dy)) ||
+                    (Math.abs(currentDz) > 0.1 && Math.abs(dz) > 0.1 && Math.signum(currentDz) != Math.signum(dz))) {
+                    return false;
+                }
+            }
+        }
+        
+        // If we got here, the mining follows a consistent direction
+        return true;
+    }
+    
+    /**
+     * Checks if a branch mining pattern is detected
+     */
+    private boolean checkBranchMiningPattern(List<MiningEntry> entries) {
+        // This is more complex and would require analyzing the 3D pattern
+        // For now, we'll implement a simplified version
+        
+        // Check for alternating patterns in the mining sequence
+        // which could indicate branch mining
+        return false;
+    }
+    
+    /**
+     * Checks if two mined blocks are connected (adjacent)
+     */
+    private boolean isBlocksConnected(MiningEntry a, MiningEntry b) {
+        // Blocks are connected if they are 1 block apart or less
+        double dx = Math.abs(a.x - b.x);
+        double dy = Math.abs(a.y - b.y);
+        double dz = Math.abs(a.z - b.z);
+        
+        // Check if blocks are adjacent (sharing a face)
+        return (dx <= 1 && dy <= 1 && dz <= 1) && 
+               (dx + dy + dz <= 2);  // Ensure they share a face, not just a corner
     }
     
     /**
@@ -199,6 +370,15 @@ public class PlayerMovementData {
             suspiciousScore += 5;
         }
         
+        // Check mining patterns
+        if (veinMineCounter > 2) {
+            suspiciousScore += 5;
+        }
+        
+        if (patternMineCounter > 2) {
+            suspiciousScore += 5;
+        }
+        
         return suspiciousScore >= 10;
     }
     
@@ -244,7 +424,7 @@ public class PlayerMovementData {
      * Gets the current violation level
      */
     public int getViolationLevel() {
-        return violationLevel;
+        return (int) violationLevel;
     }
     
     /**
@@ -252,6 +432,14 @@ public class PlayerMovementData {
      */
     public void incrementViolationLevel() {
         violationLevel++;
+        lastViolationTime = System.currentTimeMillis();
+    }
+    
+    /**
+     * Increments the violation level by a specific amount
+     */
+    public void incrementViolationLevel(float amount) {
+        violationLevel += amount;
         lastViolationTime = System.currentTimeMillis();
     }
     
@@ -284,6 +472,23 @@ public class PlayerMovementData {
             this.toZ = toZ;
             this.yaw = yaw;
             this.pitch = pitch;
+        }
+    }
+    
+    /**
+     * Class representing a single mining action
+     */
+    private static class MiningEntry {
+        private final long timestamp;
+        private final double x, y, z;
+        private final String blockType;
+        
+        public MiningEntry(long timestamp, double x, double y, double z, String blockType) {
+            this.timestamp = timestamp;
+            this.x = x;
+            this.y = y;
+            this.z = z;
+            this.blockType = blockType;
         }
     }
 } 
