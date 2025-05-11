@@ -1,0 +1,21 @@
+plugin:
+  enabled: "NoBaritone protection activated!"
+  disabled: "NoBaritone protection deactivated."
+
+action:
+  kick: "Suspicious movement patterns detected. Please disable Baritone or other pathfinding mods."
+  ban: "Automated pathfinding detected. Please disable Baritone or similar mods."
+
+player:
+  warning: "Warning: Your movement patterns are being flagged as suspicious. If you're using Baritone or another bot, please disable it."
+
+admin:
+  notification: "Player {0} may be using Baritone. Violation level: {1}"
+  
+log:
+  player_kicked: "Player {0} was kicked for suspicious movement patterns (possible Baritone). Violation level: {1}"
+  player_banned: "Player {0} was banned for automated pathfinding (Baritone). Violation level: {1}"
+  
+debug:
+  enabled: "Debug mode enabled for player {0}"
+  pattern_detected: "Baritone pattern detected: {0} with confidence {1}%" 

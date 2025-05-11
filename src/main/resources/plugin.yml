@@ -1,0 +1,40 @@
+name: NoBaritone
+version: '${project.version}'
+main: com.nobaritone.plugin.NoBaritone
+api-version: 1.16
+authors: [NoBaritoneTeam]
+description: Advanced protection against Baritone and similar pathfinding mods
+website: https://github.com/nobaritone
+
+commands:
+  nobaritone:
+    description: Main command for NoBaritone plugin
+    usage: /<command> [reload|status|toggle|debug|help]
+    aliases: [nb, nobot]
+    permission: nobaritone.admin.use
+
+permissions:
+  nobaritone.admin.use:
+    description: Allows using the base /nobaritone command
+    default: op
+  nobaritone.admin.reload:
+    description: Allows reloading the plugin configuration
+    default: op
+  nobaritone.admin.status:
+    description: Allows checking the plugin status
+    default: op
+  nobaritone.admin.toggle:
+    description: Allows toggling the plugin on/off
+    default: op
+  nobaritone.admin.debug:
+    description: Allows using debug commands
+    default: op
+  nobaritone.admin.advanced:
+    description: Allows viewing advanced settings
+    default: op
+  nobaritone.notify:
+    description: Receive notifications about suspicious players
+    default: op
+  nobaritone.bypass:
+    description: Bypass NoBaritone detection
+    default: false 

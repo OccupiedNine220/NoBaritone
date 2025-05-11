@@ -1,0 +1,55 @@
+# NoBaritone Configuration
+# Protection against Baritone and similar path-finding bots
+
+# Language setting (en_US, ru_RU)
+language: "en_US"
+
+# Detection settings
+detection:
+  enabled: true
+  
+  # Movement pattern detection
+  movement-similarity-threshold: 0.85
+  pattern-sample-size: 20
+  algorithmic-path-detection: 0.7
+  min-samples: 10
+  
+  # Player exclusions
+  exclude-op-players: true
+  exclude-creative-mode: true
+  ignore-vertical-movement: false
+  
+  # Advanced detection settings
+  advanced:
+    check-block-break-patterns: true
+    check-pathfinding: true
+    max-violation-points: 100
+    violation-decay-minutes: 30
+    enable-packet-analysis: false
+
+# Action settings
+action:
+  # Thresholds for different actions
+  notification-threshold: 5
+  kick-threshold: 15
+  ban-threshold: 30
+  
+  # Enable/disable actions
+  notify-admins: true
+  warn-player: true
+  kick-enabled: true
+  ban-enabled: false
+  log-to-file: true
+  
+  # Ban duration in minutes (0 = permanent)
+  ban-duration: 120
+
+# Logging settings
+logging:
+  detailed-movement-logging: false
+  log-suspicious-patterns: true
+  
+# Debug settings
+debug:
+  enabled: false
+  log-level: 1  # 1=basic, 2=detailed, 3=verbose 
