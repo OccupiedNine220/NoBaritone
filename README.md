@@ -78,11 +78,9 @@ You can add your own language file by creating a new file in the `plugins/NoBari
 ## Building from Source
 
 ```bash
-git clone https://github.com/nobaritone/NoBaritone.git
+git clone https://github.com/OccupiedNine220/NoBaritone.git
 cd NoBaritone
 mvn clean package
 ```
-
-## License
 
 This project is licensed under the GPL-3.0 license - see the LICENSE file for details. 
